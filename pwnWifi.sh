@@ -12,10 +12,13 @@ turquoiseColor="\e[0;36m\033[1m"
 grayColor="\e[0;37m\033[1m"
 endColor="\033[0m\e[0m"
 
+export DEBIAN_FRONTEND=noninteractive # Desactiva la ventana de instalacion interactiva.
+
 trap ctrl_c INT
 
 function ctrl_c(){
-    echo "Saliendo..."
+    echo -e "${redColor}[!]${endColor} ${grayColor}Saliendo...${endColor}"
+    tput cnorm; exit 0
 }
 
 function helpPanel(){
@@ -27,8 +30,33 @@ function helpPanel(){
     exit 0
 }
 
+function dependecies(){
+
+    reset; dependecies=(aircrack-ng macchanger)
+
+    tput civis
+    echo -e "${yellowColor}[*]${endColor}${grayColor} Comprobando dependencias...${endColor}"
+    sleep 2
+
+    for dependecy in "${dependecies[@]}"; do
+        echo -ne "${yellowColor}[*]${endColor} ${blueColor}$dependecy${endColor}${grayColor}=>${endColor}"
+
+        test -f /usr/bin/$dependecy
+
+        if [ "$(echo $?)" == "0" ]; then
+            echo -e " ${greenColor}(Instalada)${endColor}"
+        else
+            echo -e " ${redColor}(No instalada)${endColor}"
+            echo -e "${yellowColor}[i]${endColor} ${turquoiseColor}Instanlado:${endColor} ${blueColor}$dependecy${endColor}${grayColor}...${endColor}"
+            apt-get install $dependecy -y > /dev/null 2>&1
+        fi; sleep 1
+    done
+
+    tput cnorm
+}
+
 function startAttack(){
-    echo $1 $2
+    echo
 }
 
 if [ "$(id -u)" == "0" ]; then
@@ -44,7 +72,8 @@ if [ "$(id -u)" == "0" ]; then
     if [ $parameter_counter -eq 0 ]; then
 	    helpPanel
     else
-        startAttack $attack_mode $network_card
+        dependecies
+        startAttack
     fi
 
 else
